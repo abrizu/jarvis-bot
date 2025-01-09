@@ -1,0 +1,32 @@
+{
+    "custom_commands": {
+        "take the wheel": "wheel",
+        "blow up": "boom",
+        "be tsundere": "tsundere",
+        "be calm": "clam",
+        "be nice": "polite-IR",
+        "bite their kneecaps": "aggressive-IR",
+        "listen to me": "enable-voice-commands",
+        "stop listening": "disable-voice-commands"
+    },
+    "incorrect_responses_polite": [
+        "please, start with 'Jarvis, ', next time.",
+        "hey, start with 'Jarvis, '! ",
+        "use 'Jarvis, ' as your prefix!",
+        "?????????????????????????????"
+    ],
+    "incorrect_responses_aggressive": [
+        "please, start with 'Jarvis, '",
+        "hey shithead, start with 'Jarvis, '",
+        "dumbass bitch, start with 'Jarvis, '",
+        "you absolute baboon, use 'Jarvis, '",
+        "?????????????????????????????",
+        "*knock knock* wtf is your fucking problem dumbass? are you choking on a glizzy or some shit? how bout you get your head out the fucking toilet and man tf up !?!??!!?!",
+        "*mayyyyyyyyybe* address me by my name first you little shit?",
+        "-# snuggles up close next to you, nuzzles and whispers: *pwetty pwetty pwease call me jarvis, uwu <3* and leaves the room.",
+        "*nuzzles*"
+    ],
+    "sassy_responses": [
+        "Talk to the hand."
+    ]
+}

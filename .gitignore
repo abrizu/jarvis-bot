@@ -1,0 +1,13 @@
+__pycache__/
+/Downloads/
+*.pyc
+*.pyo
+
+.env
+devlog.txt
+node_modules/
+versions/
+appdeps/
+
+.DS_Store
+Thumbs.db
