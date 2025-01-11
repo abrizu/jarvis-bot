@@ -6,6 +6,37 @@
 # Discord.py API for Developers
 # =======================
 
+# ===========
+# v0.2.1 implementations
+# New personalities (Not just Jarvis)
+# Persona randomizer
+# Short term memory cache (Adjustable)
+# ===========
+
+# ===========
+# TO IMPLEMENT
+# Addressing chains
+#    Example:
+#      user: mimi, hello!
+#      response: Hi!
+#      user: how are you?
+#      response: Good, you? (follow up without addressing name)
+# Traits
+#   
+# Temperature slider (random) so answers may not be similar to each other given the same response
+# small: bipolar randomly chooses when to switch personas rather than set variable
+# trigger switches: If user says something off, such as "mimi you make me ANGRY (keyword) it switches to madge persona (may be very hard to implement)"
+
+# FUTURE IMPLEMENTATION
+# Actual discord bot server commands (introductions, welcome, moderation, etc)
+# tts commands
+
+# TO FIX
+# Voice command stopping, update voice commands
+# Fix inclusion (blow up, blow up., blow up..., should result in the same since it contains the string blow up)
+# ===========
+
+
 import os, discord, time, random, re, pydirectinput, asyncio, json
 import speech_recognition as sr, threading
 from pynput.mouse import Controller
@@ -18,7 +49,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 GENAI_TOKEN_ID = os.getenv('GENAI_TOKEN')
-DISCORD_TOKEN_ID = os.getenv('JARVIS_TOKEN')
+DISCORD_TOKEN_ID = os.getenv('DISCORD_BOT_TOKEN')
 ALLOWED_CHANNEL_ID = int(os.getenv('CHANNEL_TOKEN'))
 
 genai.configure(api_key=GENAI_TOKEN_ID)
@@ -30,12 +61,13 @@ client = discord.Client(intents=intents)
 
 mouse = Controller()
 recognizer = sr.Recognizer()
-is_listening = False
 
 # Toggles
 
+is_listening = False
 response_aggressiveness_toggle = True
 sass_toggle = False
+bipolar_temp_count = 0
 
 # Load commands
 
@@ -43,8 +75,8 @@ async def send_message(channel, message):
     asyncio.run_coroutine_threadsafe(channel.send(message), asyncio.get_event_loop())
 
 def load_custom_commands():
-    with open('responses.json', 'r') as f:
-        return json.load(f)
+    with open('ai_responses.json', 'r') as responses:
+        return json.load(responses)
 
 data = load_custom_commands()
 
@@ -52,26 +84,135 @@ custom_commands = data["custom_commands"]
 incorrect_responses_polite = data["incorrect_responses_polite"]
 incorrect_responses_aggressive = data["incorrect_responses_aggressive"]
 
+def load_ai_prompts():
+    with open('ai_prompts.json', 'r') as prompts:
+        return json.load(prompts)
+    
+ai_personalities = load_ai_prompts()
+
+jarvis = ai_personalities["jarvis_bot"]
+mimi = ai_personalities["mimi_bot"]
+snoop = ai_personalities["snoop_dog_bot"]
+
+fallback = ai_personalities["fallback"]
+limiter = ai_personalities["limiter"]
+
+current_personality = mimi # Switch personalities
+persona_switch = True # True returns random persona
+init_persona = current_personality["persona"]["normal"]
+
+
+# =======================
+# Settings
+# =======================
+
+def store_memories(user_input, ai_response, file_path="memory_cache.txt"):
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            lines = file.readlines()
+    except FileNotFoundError:
+        lines = [] 
+
+    memories = [lines[i:i + 3] for i in range(0, len(lines), 3)]
+
+    # Ensure we don't exceed set memories (value can be changed depending on AI accuracy with relevant memories)
+    if len(memories) >= 5: # Set amount of memories
+        memories.pop(0)
+
+    # Add the new memory
+    new_memory = [
+        f"user_input: '{user_input}'\n",
+        f"ai_response: {ai_response}\n"
+    ]
+    memories.append(new_memory)
+
+    with open(file_path, "w", encoding="utf-8") as file:
+        for memory in memories:
+            file.writelines(memory)
+
+def read_memories(file_path="memory_cache.txt"):
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            lines = file.readlines()
+    except FileNotFoundError:
+        return []  
+
+    memories = [lines[i:i+3] for i in range(0, len(lines), 3)]
+
+    formatted_memories = []
+    for memory in memories:
+        if len(memory) == 3:
+            user_input = memory[0].strip()
+            ai_response = memory[1].strip()
+            formatted_memories.append({"user_input": user_input, "ai_response": ai_response})
+
+    return formatted_memories
+
+def execute_memories(command, selected_persona, prompt_prefix, lim, memories=[]):
+    memories = read_memories()
+    memory_section = ""
+
+    if memories:
+        memory_section = "---- Relevant Memories ----\n"
+        for memory in memories:
+            memory_section += f"{memory['user_input']}\n"
+            memory_section += f"{memory['ai_response']}\n"
+        memory_section += "---------------------------\n\n"
+        memory_section += "You are to remember these memories and incorporate them into your response only when necessary.\n\n"
+
+    prompt = (
+        f"{memory_section}"
+        f"{prompt_prefix} Additionally, {selected_persona} Respond to the user with this personality. \nUser response: '{command}' \n{lim}\n\n"
+    )
+
+    return prompt
+
+def bipolar(interval, current_persona):
+    personas = current_personality.get("persona", {})
+    global bipolar_temp_count
+    # print(f"{bipolar_temp_count}, {interval}")
+
+    if not personas:
+        return current_persona
+
+    if bipolar_temp_count >= interval:
+        # print(f"{bipolar_temp_count}, {interval}")
+        current_persona = random.choice(list(personas.values()))
+        bipolar_temp_count = 0
+    else:
+        bipolar_temp_count += 1
+
+    return current_persona
+
+
 # =======================
 # Client events
 # =======================
 
 @client.event
-async def on_ready(): # Initial deployment 
-
+async def on_ready():  # Initial deployment
     print(f'{client.user} has connected to Discord!')
-
-    intro_prompt = "Begin with "'Greetings, sir. I am J.A.R.V.I.S., your integrated personal AI assistant.'" Continue your introduction from there in one short sentence."
     channel = client.get_channel(ALLOWED_CHANNEL_ID)
-    intro = await handle_response(intro_prompt)
-    await channel.send(intro)
+
+    if current_personality == mimi:
+        intro_prompt = current_personality["intro"]
+        await channel.send(intro_prompt)
+    else:
+        intro_prompt = current_personality["intro"]
+        intro = await handle_response(intro_prompt)
+        await channel.send(intro)
 
 
 @client.event
 async def on_message(message): # Command operations
     try:
 
-        global response_aggressiveness_toggle, sass_toggle
+        global response_aggressiveness_toggle, sass_toggle, command
+
+        tagline = current_personality["prefix"]
+        fallback_ai = fallback["prefix"]
+
+        personas = current_personality.get("persona", {})
 
         if message.author == client.user:
             return
@@ -80,19 +221,18 @@ async def on_message(message): # Command operations
             match = re.match(r"^\w+,", message.content.strip())
             if match:
                 # Split the message content by the first comma
-                # Syntax: Jarvis, Hello!
+                # Syntax: (bot), Hello!
                 command_parts = message.content.strip().split(",", 1) 
                 command = command_parts[0].strip().lower()
-                text = command_parts[1] if len(command_parts) > 1 else "" 
 
-                print(f"Command: '{command}', Text: '{text}'")
+                # print(f"Command: '{command}', Text: '{text}'")
 
-                # Check for specific Jarvis commands
-                if command.startswith("jarvis") or command.startswith("override"):
-                    prefix = "jarvis" if command.startswith("jarvis") else "override"
+                # Check for specific bot commands
+                if command.startswith(tagline) or command.startswith(fallback_ai):
+                    prefix = tagline if command.startswith(tagline) else fallback_ai
                     command = command_parts[1].strip()
 
-                    print(f"Processed command: '{command}'") 
+                    # print(f"Processed command: '{command}'") 
 
                     # Registers if a custom command is in the system before resorting to a gpt response
                     if command in custom_commands: 
@@ -100,13 +240,25 @@ async def on_message(message): # Command operations
 
                     else:
                         prompt_prefix = ( 
-                            "Scenario: You are roleplaying as Jarvis the Chatbot from Marvel. In one or two sentences, "
-                            if prefix == "jarvis" else
-                            "In less than 4000 characters, explain: "
+                            current_personality["prompt"] if prefix == tagline else fallback["prompt"]
                         )
-                        prompt = f"{prompt_prefix}{command}"
-                        print(f"switching to Gemini")
+                        lim = limiter # Ensure prompt does not exceed 4000 characters
+                        if persona_switch == True and personas: # if the selected ai bot contains optional personas tag
+                            global init_persona
+                            
+                            selected_persona = bipolar(3, init_persona)
+                            init_persona = selected_persona
+                            # print(f"Response: {selected_persona}")
+                            prompt = execute_memories(command, selected_persona, prompt_prefix, lim)
+                            print(f"{prompt}")
+                        else:
+
+                            #v0.1.1, does not include memories, extensive personalities, etc.
+
+                            prompt = f"{prompt_prefix} User response: '{command}' {lim}"
+                        # print(f"switching to Gemini \n{prompt}")
                         response_text = await handle_response(prompt)
+
                         await message.channel.send(response_text)
 
                 else:
@@ -116,7 +268,6 @@ async def on_message(message): # Command operations
         
     except Exception as e:
             print(f"An error occurred: {e}")
-            
 
 # =======================
 # Command selector
@@ -130,14 +281,8 @@ async def handle_custom_command(command, message):
     match action:
         case "boom":
             await boombot()
-        case "tsundere" | "calm":
-            sass_toggle = True
-            await message.channel.send("Hmmmh.")
-        case "clam":
-            sass_toggle = False
-            await message.channel.send("calm")
         case "wheel":
-            await message.channel.send("Of course, sir.")
+            await message.channel.send("Of course.")
             take_the_wheel()
             await message.channel.send("Did we crash?")
         case "polite-IR":
@@ -159,6 +304,9 @@ async def handle_custom_command(command, message):
 
 async def handle_response(prompt):
     response = model.generate_content(prompt)
+    global command
+
+    store_memories(command, response.text)
     return response.text
 
 # =======================
@@ -258,13 +406,14 @@ async def boombot():
             await countdown_message.edit(content=f"{countdown_time}...")
         
         await asyncio.sleep(1)
-        await countdown_message.edit(content="Goodbye, sir.")
+        await countdown_message.edit(content="Goodbye.")
         await asyncio.sleep(1)
         await countdown_message.delete()
         await client.close()
 
 # ==========
 # VOICE COMMAND 0.1.1 WORKING BETA (LOCAL MACHINE ONLY)
+# OUTDATED
 
 # FUNCTIONALITY 
 # Jarvis, listen to me: Returns voice listener to address voice commands with
@@ -334,7 +483,7 @@ async def listen_for_commands(channel):
                     await handle_custom_command(processed_command, response_text)
                 else:
                     prompt_prefix = (
-                        "Scenario: You are roleplaying as Jarvis the Chatbot from Marvel. In one or two sentences, "
+                        "Scenario: You are roleplaying as Michael Jackson. In one or two sentences, "
                     )
                     prompt = f"{prompt_prefix}{processed_command}"
                     print("Switching to Gemini")

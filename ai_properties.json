@@ -1,0 +1,6 @@
+{
+    "ai-model": {
+        "LLama-3": "Llama-3",
+        "Gemini_1-5_Flash": "Gemini_1-5"
+    }
+}

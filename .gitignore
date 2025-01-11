@@ -8,6 +8,7 @@ devlog.txt
 node_modules/
 versions/
 appdeps/
+ai_personalities/
 
 .DS_Store
 Thumbs.db
