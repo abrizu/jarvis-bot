@@ -1,9 +1,18 @@
 # =======================
 # Jarvis bot v0.1.1 for discord, featuring silly voice commands and AI implementation
  
-# Utilizes
-# Gemini 1.5 Flash
-# Discord.py API for Developers
+# SOFTWARE STACK GOING FORWARD
+# LLM: Gemini 1.5 Flash (Conversational)
+# Out: Discord API
+# NER, Training: spaCy for pretrained data
+# DB: JSON, CSV, TXT for smaller implementation; expand to SQL if ever needed
+# 
+# TTS: ElevenLabs Flash V2 (10k token limit)
+#     Voice: Tess, Stability 35%, Similarity 55% (Similar to Hermione, Melina, etc.)
+#
+# MEMORY HANDLING PARAMETERS:
+#    Voice & Text Response: Conversational Usage
+#        User Input, AI Output
 # =======================
 
 # ===========
@@ -14,117 +23,81 @@
 # ===========
 
 # ===========
+# v0.3.1 implementations
+# (Nothing yet, just AI Training / Fine tuning)
+# ===========
+
+# =====
 # TO IMPLEMENT
-# Addressing chains
+# Addressing chains (deprecated) vvvv
 #    Example:
 #      user: mimi, hello!
 #      response: Hi!
 #      user: how are you?
 #      response: Good, you? (follow up without addressing name)
-# Traits
-# Advanced memory: Using databases, structured keywords and prompts, pattern recognition
-#   
+# *I will most likely convert this bot to purely conversational, not require an address.*
+# The bot also should be able to join in on conversations / ignore what they want to / don't want to.  
+
+# Data Quality Improvements
+# Tokenization only would occur on UI that contains relevant / new data, avoiding short one word responses.
+# How this can happen: Sufficient data would be able to track common words / verbs: The, in, run, a, we, etc.
+#                      Uncommon words: The sentence could be tracked then tokenized, added to the database.
+#                          As I expand the database with more responses, the more it ignores common words compared to uncommon words.
+
 # Temperature slider (random) so answers may not be similar to each other given the same response
 # small: bipolar randomly chooses when to switch personas rather than set variable
-# trigger switches: If user says something off, such as "mimi you make me ANGRY (keyword) it switches to madge persona (may be very hard to implement)"
+# Text to Speech: ElevenLabs research (only)
+# Seamless voice integration: conversational 
 
-# FUTURE IMPLEMENTATION
-# Actual discord bot server commands (introductions, welcome, moderation, etc)
-# tts commands
+# Relevant Memories needs an update: Soft tokenize data, store into JSON, store more memories w/o overloading the prompt
+# Voice commands needs an update: To be constantly running w/ fewer / nonexistent timeouts, act as conversational bot
 
-# TO FIX
+# Future:
+# trigger switches: If user says something off, such as "mimi you make me ANGRY (keyword) it switches to madge persona"
+# Can be implemented using tokenization. If value of keyword increases (is added) and has a leading proposition (Mimi, you *make me* ANGRY or Mimi, I *am* ANGRY with you)
+# Tracking token usage going into fine tuning models
+# Look into PyTorch for training neural networks
+# =====
+
+# Fine Tuning: Utilize a large-scale dataset to condition the bot to perform better on its specific task, opposed to just feeding it extensive prompts
+#   - Will be used conversationally, where it will adapt to my humor / banter back at me (similar to NeuroSama)
+# Relevant Memories: Be able to recall the last 10-15 memories in JSON format, highlighting key things such as Event, Date, Person, etc.
+#   - Different from fine tuning as it will be fed in with the prompt, allowing for simpler leads into the next conversation.
+
+# =====
+# AI FOCUS WHEN DEVELOPING / TRAINING: 
+#     Named Entity Recognition, (Categorizing People, Locations, Events, etc.) 
+#     Event Recollection, (Remembering Events)
+#     Diologue Flow Management, (Maintaining the feel and tone of conversation)
+#     Common Keywords, (Emotes, Slang between users)
+#     Intent Recognition, (Predict / determine the user's goal in the converation)
+#     Personalized Responses, (Adapt to the user's preferences)
+#     Sentiment Analysis (Recognize the emotional tone of the user's message) (Whether to be HYPER!!!!!, Serious.)
+# =====
+
+# =====
+# CURRENT PROJECT
+#   Advanced memory: Using databases, structured keywords and prompts, pattern recognition
+#   SQL for database structures 
+
+# - using Named Entity Recognition (NER), identify structured information such as Names, Dates, Events, Event Details, etc. 
+#       (this automatically tokenizes the data and highlights key values used in pre-trained memory.)
+# - this new dataset will replace my Relevant Memories dataset with set values for different memory outputs. 
+#       I will be able to apply it to the model and formulate memories with it. Additionally, it should be able to append me
+# =====
+
+# =====
+# BUGS / TO FIX
 # Voice command stopping, update voice commands
-# Fix inclusion (blow up, blow up., blow up..., should result in the same since it contains the string blow up)
-# File management and refactoring
+# Fix command inclusion (depreciated as project moves forward)
+# =====
+
 # ===========
 
-# from scripts import (
-#     client,
-#     model,
-#     GENAI_TOKEN_ID,
-#     DISCORD_TOKEN_ID,
-#     ALLOWED_CHANNEL_ID,
-#     custom_commands,
-#     incorrect_responses_polite,
-#     incorrect_responses_aggressive,
-#     jarvis,
-#     mimi,
-#     snoop,
-#     fallback,
-#     limiter,
-#     current_personality,
-#     persona_switch,
-#     init_persona,
-#     load_custom_commands,
-#     load_ai_prompts,
-# )
-
-import os, discord, time, random, re, pydirectinput, asyncio, json
-import speech_recognition as sr, threading
-from pynput.mouse import Controller
-import google.generativeai as genai
-from dotenv import load_dotenv
-from settings import store_memories, execute_memories, bipolar
-# from custom_commands import handle_custom_command, handle_response
-
-# =======================
-# Startup
-# =======================
-
-load_dotenv()
-GENAI_TOKEN_ID = os.getenv('GENAI_TOKEN')
-DISCORD_TOKEN_ID = os.getenv('DISCORD_BOT_TOKEN')
-ALLOWED_CHANNEL_ID = int(os.getenv('CHANNEL_TOKEN'))
-
-genai.configure(api_key=GENAI_TOKEN_ID)
-model = genai.GenerativeModel("gemini-1.5-flash")
-
-intents = discord.Intents.default()
-intents.message_content = True
-client = discord.Client(intents=intents)
-
-mouse = Controller()
-recognizer = sr.Recognizer()
-
-# Toggles
-
-is_listening = False
-response_aggressiveness_toggle = True
-sass_toggle = False
-bipolar_temp_count = 0
-
-# Load commands
-
-async def send_message(channel, message):
-    asyncio.run_coroutine_threadsafe(channel.send(message), asyncio.get_event_loop())
-
-def load_custom_commands():
-    with open('properties/ai_responses.json', 'r') as responses:
-        return json.load(responses)
-
-data = load_custom_commands()
-
-custom_commands = data["custom_commands"]
-incorrect_responses_polite = data["incorrect_responses_polite"]
-incorrect_responses_aggressive = data["incorrect_responses_aggressive"]
-
-def load_ai_prompts():
-    with open('properties/ai_prompts.json', 'r') as prompts:
-        return json.load(prompts)
-    
-ai_personalities = load_ai_prompts()
-
-jarvis = ai_personalities["jarvis_bot"]
-mimi = ai_personalities["mimi_bot"]
-snoop = ai_personalities["snoop_dog_bot"]
-
-fallback = ai_personalities["fallback"]
-limiter = ai_personalities["limiter"]
-
-current_personality = mimi # Switch personalities
-persona_switch = True # True returns random persona
-init_persona = current_personality["persona"]["normal"]
-
+import random, re
+from memory_handler import *
+from config import *
+from custom_commands import *
 
 # =======================
 # Client events
@@ -140,7 +113,7 @@ async def on_ready():  # Initial deployment
         await channel.send(intro_prompt)
     else:
         intro_prompt = current_personality["intro"]
-        intro = await handle_response(intro_prompt)
+        intro = await handle_response(intro_prompt, False)
         await channel.send(intro)
 
 
@@ -153,7 +126,7 @@ async def on_message(message): # Command operations
         tagline = current_personality["prefix"]
         fallback_ai = fallback["prefix"]
 
-        personas = current_personality.get("persona", {})
+        personas = current_personality["persona"]
 
         if message.author == client.user:
             return
@@ -184,23 +157,24 @@ async def on_message(message): # Command operations
                             current_personality["prompt"] if prefix == tagline else fallback["prompt"]
                         )
                         lim = limiter # Ensure prompt does not exceed 4000 characters
-                        if persona_switch == True and personas: # if the selected ai bot contains optional personas tag
+                        # print(command)
+                        if (command_parts[0] != "override") and persona_switch == True and personas: # if the selected ai bot contains optional personas tag
                             global init_persona
                             
-                            selected_persona = bipolar(3, init_persona)
+                            selected_persona = bipolar(20, init_persona)
                             init_persona = selected_persona
                             # print(f"Response: {selected_persona}")
                             prompt = execute_memories(command, selected_persona, prompt_prefix, lim)
                             print(f"{prompt}")
+                            response_text = await handle_response(prompt, True)
+                            await message.channel.send(response_text)
                         else:
 
                             #v0.1.1, does not include memories, extensive personalities, etc.
 
                             prompt = f"{prompt_prefix} User response: '{command}' {lim}"
-                        # print(f"switching to Gemini \n{prompt}")
-                        response_text = await handle_response(prompt)
-
-                        await message.channel.send(response_text)
+                            response_text = await handle_response(prompt, False)
+                            await message.channel.send(response_text)
 
                 else:
                     # Case where the command proceeds with correct syntax, but misspelled name
@@ -209,6 +183,7 @@ async def on_message(message): # Command operations
         
     except Exception as e:
             print(f"An error occurred: {e}")
+
 
 # =======================
 # Command selector
@@ -243,225 +218,19 @@ async def handle_custom_command(command, message):
             await message.channel.send("Ok fine.")
             stop_voice_command_listener()
 
-async def handle_response(prompt):
-    response = model.generate_content(prompt)
+async def handle_response(prompt, memory_trigger):
+    response = model.generate_content(prompt, 
+        generation_config=genai.types.GenerationConfig(
+            temperature=current_temp
+
+        )
+    )
+    
     global command
 
-    store_memories(command, response.text)
+    if memory_trigger == True:
+        store_memories(command, response.text)
+
     return response.text
-
-# =======================
-# Command algorithms
-# =======================
-
-# ==========
-# MOVEMENT RANDOMIZER 0.1
-# Fun movement randomizer that randomly selects movement keys to control your game (up to 5 minutes)
-# MUST ONLY BE USED IN GAME APPLICATIONS ONLY, OTHERWISE WILL BREAK
-# Forza, Minecraft, etc.
-
-# Jarvis, take the wheel: Randomly generated movement directions
-def take_the_wheel():
-
-    movement_keys = ['w', 'a', 's', 'd']
-    key_combinations = [
-        ('w', 'a'),
-        ('w', 'd'),
-        ('s', 'a'),
-        ('s', 'd'),
-        ('w', 'space'),
-        ('a', 'space'),
-        ('s', 'space'),
-        ('d', 'space'),
-    ]
-
-    key_sequence = [] 
-    last_key = None
-    last_combo_key = None
-    
-    # Generate a random sequence of key presses (single or combination of keys)
-    for _ in range(random.randint(25, 50)): # 25-50 total iterations per key
-        if random.random() > 0.33:  # Randomly pick single or combination of keys, movement_default 33% chance, key_combination 66% chance
-            key_combination = random.choice(key_combinations)
-            key_sequence.append(key_combination)
-        else:
-            key_sequence.append(random.choice(movement_keys))
-    
-
-    for keys in key_sequence:
-        repeat_count = random.randint(9, 25)
-
-        if isinstance(keys, tuple):  # If combination of keys
-            if keys != last_combo_key:  # On combination change
-                if last_combo_key:
-                    pydirectinput.keyUp(last_combo_key[0])
-                    pydirectinput.keyUp(last_combo_key[1])
-                    time.sleep(0.02)
-
-                # Apply new combination
-                pydirectinput.keyDown(keys[0])
-                pydirectinput.keyDown(keys[1])
-                time.sleep(random.uniform(0.2, 0.5))
-                last_combo_key = keys
-
-            # Repeat combination press forrandomly chosen repeat count
-            for _ in range(repeat_count):
-                time.sleep(random.uniform(0.2, 0.5))
-            pydirectinput.keyUp(keys[0])
-            pydirectinput.keyUp(keys[1])
-            time.sleep(0.02)
-                
-        else:  # Single key operations
-            if keys != last_key:
-                if last_key:
-                    pydirectinput.keyUp(last_key)
-                pydirectinput.keyDown(keys)
-                last_key = keys
-
-            # Repeat key press for randomly chosen repeat count
-            for _ in range(repeat_count):
-                time.sleep(random.uniform(0.2, 0.5)) 
-            pydirectinput.keyUp(keys)
-            time.sleep(0.02)
-
-    if last_key:
-        pydirectinput.keyUp(last_key)
-
-
-# ==========
-# JARVIS KILL SWITCH
-# A simple kill switch operation through discord to program runtime
-
-# FUNCTIONALITY
-# Jarvis, blow up: Terminates the entire program after 5 seconds (NON-CANCELLABLE)
-async def boombot():
-        global is_listening
-        is_listening = False
-        channel = client.get_channel(ALLOWED_CHANNEL_ID)
-        countdown_time = 5
-        countdown_message = await channel.send(f"Terminating in {countdown_time}...")
-
-        while countdown_time > 0:
-            await asyncio.sleep(1) 
-            countdown_time -= 1
-            await countdown_message.edit(content=f"{countdown_time}...")
-        
-        await asyncio.sleep(1)
-        await countdown_message.edit(content="Goodbye.")
-        await asyncio.sleep(1)
-        await countdown_message.delete()
-        await client.close()
-
-# ==========
-# VOICE COMMAND 0.1.1 WORKING BETA (LOCAL MACHINE ONLY)
-# OUTDATED
-
-# FUNCTIONALITY 
-# Jarvis, listen to me: Returns voice listener to address voice commands with
-# All commands work as intended
-# (BROKEN) Jarvis, stop listening: Stops voice listener and returns to normal text prompts   
-
-# BUGS
-# Stop listening does not work: It does not register its break out of the async loop
-# Listens for commands one second out of final timeout 
-
-# Jarvis, listen to me | stop listening
-async def listen_for_commands(channel):
-    message = await channel.send("Listening...")
-
-    # Cycling messages
-    cycle = ["Listening...", "Listening..", "Listening.", "Listening.."]
-    cycle_index = 0
-
-    recognizer = sr.Recognizer()
-    global is_listening
-
-    timeout_duration = 15
-    start_time = time.time()
-
-    with sr.Microphone() as source:
-        print("Listening...")
-        is_listening = True
-
-        while is_listening:
-            try:
-                recognizer.adjust_for_ambient_noise(source)
-
-                # Async.io thread management blocking I/O (Issue?)
-                audio_task = asyncio.create_task(asyncio.to_thread(recognizer.listen, source, timeout=5))
-
-                # Final timeout break operation
-                while not audio_task.done():
-                    elapsed_time = time.time() - start_time
-                    if elapsed_time > timeout_duration:
-                        print("Timeout exceeded. Stopping listening...")
-                        is_listening = False
-                        await message.edit(content="Listening timed out. ")
-                        break
-                    
-                    # Cycle Listening... while waiting for input
-                    await message.edit(content=cycle[cycle_index])
-                    cycle_index = (cycle_index + 1) % len(cycle)
-                    await asyncio.sleep(0.5)
-
-                audio = await audio_task
-
-                if not is_listening:
-                    break
-
-                # Parsing Jarvis out of voice command
-                command = recognizer.recognize_google(audio).lower()
-                processed_command = command
-                if command.startswith("jarvis"):
-                    processed_command = command[len("jarvis "):].strip()
-
-                print(f"Voice Command: {processed_command}")
-                await message.edit(content=f"Voice Command: {command}")
-
-                # Process command
-                if processed_command in custom_commands:
-                    response_text = ""
-                    await handle_custom_command(processed_command, response_text)
-                else:
-                    prompt_prefix = (
-                        "Scenario: You are roleplaying as Michael Jackson. In one or two sentences, "
-                    )
-                    prompt = f"{prompt_prefix}{processed_command}"
-                    print("Switching to Gemini")
-                    response_text = await handle_response(prompt)
-
-                    print(response_text)
-                    await channel.send(response_text)
-
-                start_time = time.time()
-                message = await channel.send("Listening...")
-                cycle_index = 0
-
-            except sr.WaitTimeoutError:
-                print("Listening timed out, waiting for new command.")
-            except sr.UnknownValueError:
-                print("Could not understand the command.")
-            except sr.RequestError as e:
-                print(f"Speech Recognition Error: {e}")
-            except KeyboardInterrupt:
-                print("Exit 400: Keyboard Interrupt")
-                break
-
-async def start_voice_command_listener(channel):
-    global is_listening
-    is_listening = True
-    await listen_for_commands(channel)
-
-def start_listening_thread(channel):
-    listener_thread = threading.Thread(target=asyncio.run, args=(start_voice_command_listener(channel),))
-    listener_thread.daemon = True
-    listener_thread.start()
-    print("Voice command listener started.")
-    
-def stop_voice_command_listener():
-    global is_listening
-    is_listening = False
-    print("Voice command listener stopped.")
-
 
 client.run(DISCORD_TOKEN_ID)

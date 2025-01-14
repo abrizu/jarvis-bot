@@ -1,6 +1,4 @@
-**Jarvis Bot v0.1.1**
-
-Jarvis bot v0.1.1 for discord
+# Jarvis Bot for Python, Discord
  
 Featuring
 Gemini 1.5 Flash

@@ -1,12 +1,13 @@
-# =======================
-# Startup
-# =======================
-
-import os, discord, time, random, re, pydirectinput, asyncio, json
-import speech_recognition as sr, threading
+import os, discord, asyncio, json, sys
+import pandas as pd
+import speech_recognition as sr
 from pynput.mouse import Controller
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+# =======================
+# Startup
+# =======================
 
 load_dotenv()
 GENAI_TOKEN_ID = os.getenv('GENAI_TOKEN')
@@ -22,6 +23,10 @@ client = discord.Client(intents=intents)
 
 mouse = Controller()
 recognizer = sr.Recognizer()
+
+generationConfig = {
+    "temperature": 1.0
+}
 
 # Toggles
 
@@ -45,6 +50,9 @@ custom_commands = data["custom_commands"]
 incorrect_responses_polite = data["incorrect_responses_polite"]
 incorrect_responses_aggressive = data["incorrect_responses_aggressive"]
 
+
+# Load personalities
+
 def load_ai_prompts():
     with open('properties/ai_prompts.json', 'r') as prompts:
         return json.load(prompts)
@@ -59,28 +67,12 @@ fallback = ai_personalities["fallback"]
 limiter = ai_personalities["limiter"]
 
 current_personality = mimi # Switch personalities
-persona_switch = True # True returns random persona
-init_persona = current_personality["persona"]["normal"]
+current_temp = 1.3 # How creative the AI is
+persona_switch = True # True returns random persona (only activate for characters that have personas)
+if persona_switch == True:
+    init_persona = current_personality["persona"]["normal"]
 
-__all__ = [
-    "client",
-    "model",
-    "GENAI_TOKEN_ID",
-    "DISCORD_TOKEN_ID",
-    "ALLOWED_CHANNEL_ID",
-    "custom_commands",
-    "incorrect_responses_polite",
-    "incorrect_responses_aggressive",
-    "ai_personalities",
-    "jarvis",
-    "mimi",
-    "snoop",
-    "fallback",
-    "limiter",
-    "current_personality",
-    "persona_switch",
-    "init_persona",
-    "load_custom_commands",
-    "load_ai_prompts",
-    "store_memories"
-]
+# Training Model
+
+csv_file_path = "AI_TRAINING/keywords_extracted.csv"
+df = pd.read_csv(csv_file_path)

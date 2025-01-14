@@ -7,63 +7,11 @@
 
 import random, pydirectinput, time, asyncio
 import speech_recognition as sr, threading
-from settings import store_memories
-from scripts import (
-    client,
-    model,
-    GENAI_TOKEN_ID,
-    DISCORD_TOKEN_ID,
-    ALLOWED_CHANNEL_ID,
-    custom_commands,
-    incorrect_responses_polite,
-    incorrect_responses_aggressive,
-    jarvis,
-    mimi,
-    snoop,
-    fallback,
-    limiter,
-    current_personality,
-    persona_switch,
-    init_persona,
-    load_custom_commands,
-    load_ai_prompts,
-)
+from config import *
 
-async def handle_custom_command(command, message):
-    global response_aggressiveness_toggle, sass_toggle
-    action = custom_commands[command]
-    print({action})
-
-    match action:
-        case "boom":
-            await boombot()
-        case "wheel":
-            await message.channel.send("Of course.")
-            take_the_wheel()
-            await message.channel.send("Did we crash?")
-        case "polite-IR":
-            response_aggressiveness_toggle = True
-            await message.channel.send("*passive*")
-        case "aggressive-IR":
-            response_aggressiveness_toggle = False
-            await message.channel.send("*passive-aggressive*")
-        case "enable-voice-commands":
-            try:
-                channel_id = client.get_channel(ALLOWED_CHANNEL_ID)
-                await handle_response("I guess this preps the voice command, then gets immediately overriden?")
-                await start_voice_command_listener(channel_id)
-            except:
-                print("Error enabling voice commands.")
-        case "disable-voice-commmands":
-            await message.channel.send("Ok fine.")
-            stop_voice_command_listener()
-
-async def handle_response(prompt):
-    response = model.generate_content(prompt)
-    global command
-
-    store_memories(command, response.text)
-    return response.text
+# =======================
+# Command algorithms
+# =======================
 
 # ==========
 # MOVEMENT RANDOMIZER 0.1
@@ -232,14 +180,14 @@ async def listen_for_commands(channel):
                 # Process command
                 if processed_command in custom_commands:
                     response_text = ""
-                    await handle_custom_command(processed_command, response_text)
+                    # await handle_custom_command(processed_command, response_text)
                 else:
                     prompt_prefix = (
                         "Scenario: You are roleplaying as Michael Jackson. In one or two sentences, "
                     )
                     prompt = f"{prompt_prefix}{processed_command}"
                     print("Switching to Gemini")
-                    response_text = await handle_response(prompt)
+                    # response_text = await handle_response(prompt)
 
                     print(response_text)
                     await channel.send(response_text)
